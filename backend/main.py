@@ -1,20 +1,37 @@
 """
 main.py
 
-Backend entry point.
+Production backend with compile + chat architecture.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from dag_validator import DAGValidator
+from info_service import info_service
+from pipeline_store import pipeline_store
 from pipeline_executor import pipeline_executor
-import traceback
+
 
 app = FastAPI()
 
 validator = DAGValidator()
 
+
+# Enable CORS
+app.add_middleware(
+
+    CORSMiddleware,
+
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Request models
 
 class PipelineRequest(BaseModel):
 
@@ -22,96 +39,111 @@ class PipelineRequest(BaseModel):
     edges: list
 
 
+class ChatRequest(BaseModel):
+
+    pipeline_id: str
+    message: str
+
+
+# Health check
+
 @app.get("/")
 def root():
+
     return {"status": "running"}
 
 
+# Compile pipeline
 
+@app.post("/pipelines/compile")
+def compile_pipeline(request: PipelineRequest):
 
-@app.post("/pipelines/parse")
-def parse_pipeline(request: PipelineRequest):
+    nodes = request.nodes
+    edges = request.edges
 
-    try:
+    num_nodes = len(nodes)
+    num_edges = len(edges)
 
-        nodes = request.nodes
-        edges = request.edges
+    is_dag, execution_order = validator.validate(nodes, edges)
 
-        print("Nodes:", nodes)
-        print("Edges:", edges)
+    if not is_dag:
 
-        num_nodes = len(nodes)
-        num_edges = len(edges)
-
-        is_dag, execution_order = validator.validate(nodes, edges)
-
-        print("Execution order:", execution_order)
-
-        response = {
+        return {
             "num_nodes": num_nodes,
             "num_edges": num_edges,
-            "is_dag": is_dag
+            "is_dag": False,
+            "success": False
         }
 
-        if is_dag:
+    system_prompt = ""
+    context = ""
 
-            result = pipeline_executor.execute({
-                "nodes": nodes,
-                "edges": edges
-            })
+    for node in nodes:
 
-            print("Executor result:", result)
+        node_type = node["type"]
 
-            response["success"] = result["success"]
-            response["output"] = result["output"]
+        if node_type == "input":
 
-        else:
+            system_prompt = node["data"].get("role", "")
 
-            response["success"] = False
-            response["output"] = None
+        elif node_type == "text":
 
-        return response
+            context += node["data"].get("content", "") + "\n"
 
-    except Exception as e:
+        elif node_type == "info":
 
-        traceback.print_exc()   # THIS IS IMPORTANT
-        raise HTTPException(500, str(e))
+            url = node["data"].get("url", "")
+
+            context += info_service.fetch(url) + "\n"
+
+    pipeline_id = pipeline_store.create(
+
+        system_prompt=system_prompt,
+        context=context
+
+    )
+
+    return {
+
+        "num_nodes": num_nodes,
+        "num_edges": num_edges,
+        "is_dag": True,
+        "success": True,
+        "pipeline_id": pipeline_id
+
+    }
 
 
-    
-    try:
+# Chat endpoint
 
-        nodes = request.nodes
-        edges = request.edges
+@app.post("/pipelines/chat")
+def chat(request: ChatRequest):
 
-        num_nodes = len(nodes)
-        num_edges = len(edges)
+    compiled_pipeline = pipeline_store.get(
 
-        is_dag, execution_order = validator.validate(nodes, edges)
+        request.pipeline_id
 
-        response = {
-            "num_nodes": num_nodes,
-            "num_edges": num_edges,
-            "is_dag": is_dag
-        }
+    )
 
-        if is_dag:
+    if not compiled_pipeline:
 
-            result = pipeline_executor.execute({
-                "nodes": nodes,
-                "edges": edges
-            })
+        raise HTTPException(
 
-            response["success"] = result["success"]
-            response["output"] = result["output"]
+            status_code=404,
+            detail="Pipeline not found"
 
-        else:
+        )
 
-            response["success"] = False
-            response["output"] = None
+    result = pipeline_executor.execute(
 
-        return response
+        compiled_pipeline,
+        request.message
 
-    except Exception as e:
+    )
 
-        raise HTTPException(500, str(e))
+    return {
+
+        "success": True,
+        "output": result
+
+    }

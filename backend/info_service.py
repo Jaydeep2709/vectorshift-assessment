@@ -1,7 +1,7 @@
 """
 info_service.py
 
-Fetches webpage content for Info Node
+Fetches website content for Info Node.
 """
 
 import requests
@@ -18,18 +18,13 @@ class InfoService:
 
             soup = BeautifulSoup(response.text, "html.parser")
 
-            # Remove scripts/styles
-            for tag in soup(["script", "style"]):
-                tag.decompose()
+            text = soup.get_text()
 
-            text = soup.get_text(separator="\n")
-
-            return text[:3000]  # limit size
+            return text[:5000]
 
         except Exception as e:
 
-            print("InfoService error:", e)
-            return ""
+            return f"Error fetching info: {str(e)}"
 
 
 info_service = InfoService()
