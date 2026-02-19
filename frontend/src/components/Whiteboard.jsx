@@ -311,7 +311,7 @@ const handleRun = async () => {
 
   return (
 
-    <Box flex={1} display="flex" flexDirection="column">
+    <Box flex={1} display="flex" sx={{ m: 2 }} flexDirection="column">
 
 
       {/* Top Toolbar */}

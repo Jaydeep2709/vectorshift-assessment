@@ -9,9 +9,9 @@ function App() {
   const [output, setOutput] = useState("");
 const [pipelineId, setPipelineId] = useState(null);
   return (
-    <Box display="flex" height="100vh">
+    <Box display="flex" width="Auto" height="100vh">
 
-      <NodePanel />
+      {/* <NodePanel /> */}
 
       <Whiteboard setOutput={setOutput}
        setPipelineId={setPipelineId} />

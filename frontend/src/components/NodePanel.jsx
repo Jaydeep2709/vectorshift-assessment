@@ -29,7 +29,7 @@ const NodePanel = () => {
   };
 
   return (
-    <div className="node-panel">
+    <div className="node-panel" sx={{ m: 2 }}>
       <div className="node-panel-header">Nodes</div>
 
       <div className="node-panel-list">
